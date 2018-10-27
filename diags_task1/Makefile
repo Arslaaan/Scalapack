@@ -1,5 +1,6 @@
-OPT=	-O2 
+OPT=	-O2
 FLAGS=	-DUSE_COMPLEX -DUSE_DOUBLE -g
+N=6
 
 ifneq (,$(findstring lomonosov,$(shell hostname)))
 	LIBS=	-lmkl_scalapack_lp64 -lmkl_lapack95_lp64 -lmkl_blacs_intelmpi_lp64 \
@@ -12,6 +13,9 @@ else
 	EFLAGS=
 endif
 
+matrix:
+	g++ -Wall create_matrix.cpp -o create_matrix
+	./create_matrix $(N) $(N) matrix
 
 all: bin
 
@@ -28,7 +32,7 @@ bin/main: build/main.o Makefile
 	mpicxx -o $@ $(OPT) build/main.o $(LIBS)
 
 test: bin/main
-	mpiexec -np 4 ./bin/main
+	mpiexec --hostfile hst -np 4 ./bin/main
 
 clean:
 	rm -rf build
@@ -36,3 +40,4 @@ clean:
 
 clear:
 	rm -rf bin lib doc
+	rm -f matrix create_matrix
