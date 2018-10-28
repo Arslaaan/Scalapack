@@ -16,6 +16,7 @@ endif
 matrix:
 	g++ -Wall create_matrix.cpp -o create_matrix
 	./create_matrix $(N) $(N) matrix
+	./create_matrix $(N) $(N) hamilton
 
 all: bin
 
@@ -40,4 +41,4 @@ clean:
 
 clear:
 	rm -rf bin lib doc
-	rm -f matrix create_matrix
+	rm -f matrix create_matrix hamilton

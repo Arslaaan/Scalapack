@@ -4,6 +4,7 @@
 #include <iostream>
 #include "scalapack.h"
 #include <iomanip>
+#include <string>
 
 using namespace std;
 
@@ -41,6 +42,19 @@ public:
     Create();
   }
 
+  int* descinit() {
+    int* descme = new int[9];
+    int iZero = 0;
+    int info;
+    int leadDim = max(myProcRows, myProcCols);
+    //cout<<"myProcRows/Cols="<<myProcRows<<" "<<myProcCols<<endl;
+    //cout<<"leadDim="<<leadDim<<endl;
+    descinit_(descme, &rows, &cols, &blocksize, &blocksize, &iZero, &iZero, &icon, &leadDim, &info);
+    if(info < 0)
+      cout<<"DESC INIT ERROR\n";
+    return descme;
+  }
+
   void Create() {
     int x,y;
     int root = 0;
@@ -55,28 +69,31 @@ public:
     desc = descinit();
   }
 
-  void Populate() {
+  void Fill(string name) {
     MPI_File thefile;
     MPI_Offset filesize;
-    MPI_File_open(MPI_COMM_WORLD,"matrix",MPI_MODE_RDONLY,MPI_INFO_NULL,&thefile);
+    MPI_File_open(MPI_COMM_WORLD,name.c_str(),MPI_MODE_RDONLY,MPI_INFO_NULL,&thefile);
     MPI_File_get_size(thefile,&filesize);
-  	for (int i = 0; i < myProcRows; i++) {
-      double* tmp_buf = new double[2*myProcCols];
-      MPI_File_set_view(thefile,2*sizeof(double)*(cols*(myProcRowsOffset+i)+myProcColsOffset),MPI_DOUBLE,MPI_DOUBLE,"native",MPI_INFO_NULL);
-      MPI_File_read(thefile,tmp_buf,2*myProcCols,MPI_DOUBLE,MPI_STATUS_IGNORE);
-  		for (int j = 0; j < myProcCols; j++) {
-  			data[i*myProcCols + j] = complex<double>(tmp_buf[j*2],0);
-  		}
-      delete(tmp_buf);
-  	}
-  }
-
-  void Fill_diag() {
-    if(myProcCol != myProcRow) {
-      return;
+    int filesize_name = filesize/sizeof(double);
+    const int matrix = rows*cols*2,qvector = rows*2,number = 2;
+    if(filesize == matrix){
+      for (int i = 0; i < myProcRows; i++) {
+        double* tmp_buf = new double[2*myProcCols];
+        MPI_File_set_view(thefile,2*sizeof(double)*(cols*(myProcRowsOffset+i)+myProcColsOffset),MPI_DOUBLE,MPI_DOUBLE,"native",MPI_INFO_NULL);
+        MPI_File_read(thefile,tmp_buf,2*myProcCols,MPI_DOUBLE,MPI_STATUS_IGNORE);
+        for (int j = 0; j < myProcCols; j++) {
+          data[i*myProcCols + j] = complex<double>(tmp_buf[j*2],0);
+        }
+        delete(tmp_buf);
+      }
     }
-    for(int i = 0; i < myProcRows; i++) {
-      data[i*(myProcCols+1)] = i+myProcRowsOffset+1;
+    else{
+      if(filesize == qvector){
+        //i dont know now
+      }
+      else{
+        //to do later
+      }
     }
   }
 
@@ -86,6 +103,20 @@ public:
         data[i*myProcCols + j] = c;
       }
     }
+  }
+
+  void Fill(double* x){
+    for (int i = 0; i < myProcRows; i++) {
+  		for (int j = 0; j < myProcCols; j++) {
+        if(myProcRow == myProcCol) {
+          if(i == j)
+    			   data[i*myProcCols + j] = x[i + myProcRow*blocksize];
+        }
+        else{
+          data[i*myProcCols + j] = 0;
+        }
+  		}
+  	}
   }
 
   void Print() {
@@ -101,23 +132,17 @@ public:
             }
             cout<<endl;
           }
+          MPI_Barrier(MPI_COMM_WORLD);
         }
       }
     }
     MPI_Barrier(MPI_COMM_WORLD);
+    if(rank == 0)
+      cout<<"--------------------------------"<<endl;
   }
 
   complex<double>* getData() {
     return data;
-  }
-
-  void setData(complex<double>* new_data) {
-    for(int i = 0; i < myProcRows; i++) {
-      for(int j = 0; j < myProcCols; j++) {
-        int idx = i*myProcCols + j;
-        data[idx] = new_data[idx + myProcRowsOffset*cols + myProcColsOffset];
-      }
-    }
   }
 
   int* getDesc() {
@@ -125,20 +150,14 @@ public:
   }
 
   /*
-   * result: C=C+AB
+   * result: C=C+this*B
    * C изменится,
-   * C меняется во время процедуры, так что не использовать ее в качестве A или B
+   * C меняется во время процедуры, так что не использовать ее в качестве this или B
    */
   void Multiply(DistributedMatrix& B, DistributedMatrix& C) {
     complex<double> cdOne(1.0,0.0);
     complex<double> cdZero(0.0, 0.0);
     int ione = 1;
-    if(rank == 0)
-      cout<<"--------------A--------------"<<endl;
-    Print();
-    if(rank == 0)
-      cout<<"--------------B--------------"<<endl;
-    B.Print();
 
     pzgemm_((char*)"N", (char*)"N", &rows, &rows, &rows,
             &cdOne, data, &ione, &ione, desc,
@@ -146,24 +165,11 @@ public:
             &cdZero, C.getData(), &ione, &ione, C.getDesc());
   }
 
-  int* descinit() {
-    int* descme = new int[9];
-    int iZero = 0;
-    int info;
-    int leadDim = max(myProcRows, myProcCols);
-    //cout<<"myProcRows/Cols="<<myProcRows<<" "<<myProcCols<<endl;
-    //cout<<"leadDim="<<leadDim<<endl;
-    descinit_(descme, &rows, &cols, &blocksize, &blocksize, &iZero, &iZero, &icon, &leadDim, &info);
-    if(info < 0)
-      cout<<"DESC INIT ERROR\n";
-    return descme;
-  }
 
-  void createSVD(DistributedMatrix& middle, DistributedMatrix& u, DistributedMatrix& vt) {
+  void CreateSVD(DistributedMatrix& middle, DistributedMatrix& u, DistributedMatrix& vt) {
     // TODO test it
 
-    double* s = new double [rows];//
-    complex<double> singularValues[rows*cols];
+    double* s = new double [rows];
 
     int iOne = 1;
     complex<double> *work = new complex<double>[1];
@@ -186,11 +192,26 @@ public:
       vt.getData(), &iOne, &iOne, vt.getDesc(),
       work, &lwork, rwork, &info);
 
+    middle.Fill(s);
+    delete(s);
     //delete[] work, rwork;
   }
 
+  void Exp(double dt){
+    for(int i = 0;i < myProcRows;++i){
+      data[i*myProcCols + i] = complex<double>(0,-1)*exp(data[i*myProcCols + i])*dt;
+    }
+  }
+
+  DistributedMatrix operator = (DistributedMatrix& t){
+    for(int i = 0;i < myProcRows;++i)
+      for(int j = 0;j < myProcCols;++j){
+        data[i*myProcCols + j] = t.getData()[i*myProcCols + j];
+      }
+  }
 
   ~DistributedMatrix() {
+    delete(data);
     //Cblacs_gridexit(icon);
     //Cblacs_exit(0);
   }
@@ -201,42 +222,44 @@ void test_mult(int rank, int nproc, int icon) {
   DistributedMatrix A(6,6,rank,nproc,3,icon);
   DistributedMatrix B(6,6,rank,nproc,3,icon);
   DistributedMatrix C(6,6,rank,nproc,3,icon);
-  A.Populate();
-  B.Populate();
-  C.Fill(0);
+  A.Fill("matrix");
+  B.Fill("matrix");
+  C.Fill(static_cast<double>(0));
   A.Multiply(B,C);
   C.Print();
 }
 
 void test_svd(int rank, int nproc, int icon) {
-  DistributedMatrix A(6,6,rank,nproc,3,icon);
-  DistributedMatrix B(6,6,rank,nproc,3,icon);
-  DistributedMatrix C(6,6,rank,nproc,3,icon);
-  DistributedMatrix S(6,6,rank,nproc,3,icon);
-  A.Fill_diag();
-  B.Fill(0);
-  C.Fill(0);
+  double dt = 0.5;
+  DistributedMatrix H(6,6,rank,nproc,3,icon);
+  DistributedMatrix left(6,6,rank,nproc,3,icon);
+  DistributedMatrix right(6,6,rank,nproc,3,icon);
+  DistributedMatrix middle(6,6,rank,nproc,3,icon);
+  H.Fill("hamilton");
+  left.Fill(static_cast<double>(0));
+  right.Fill(static_cast<double>(0));
 
-  A.createSVD(S, B, C);
-
-  A.Print();
-  B.Print();
-  C.Print();
-  S.Print();
+  H.CreateSVD(middle, left, right);// H == left*middle*right
+  middle.Exp(dt);// middle = exp(middle*(-i)*dt)
+  middle.Multiply(right,H);// H = middle*right
+  left.Multiply(H,right);// right = left * H
+  H = right;// H == right == left * H
+  //H.Print();
 }
 
 
 int main(int argc,char** argv){
   // init
   int rank,nproc;
+  int gridrow = 2,gridcol = 2;
   MPI_Init(&argc, &argv);
   Cblacs_pinfo(&rank, &nproc);
   int icon = -2;
   Cblacs_get(-1, 0, &icon);
-  Cblacs_gridinit(&icon, (char *) "r", 2, 2);
+  Cblacs_gridinit(&icon, (char *) "r", gridrow, gridcol);
 
-  test_mult(rank, nproc, icon);
-  //test_svd(rank, nproc, icon);
+  //test_mult(rank, nproc, icon);
+  test_svd(rank, nproc, icon);
 
   // exit
   //Cblacs_gridexit(icon);
