@@ -15,8 +15,9 @@ endif
 
 matrix:
 	g++ -Wall create_matrix.cpp -o create_matrix
-	./create_matrix $(N) $(N) matrix
-	./create_matrix $(N) $(N) hamilton
+	./create_matrix $(N) $(N) matrix line
+	./create_matrix $(N) $(N) hamilton line
+	./create_matrix $(N) $(N) rho random
 
 all: bin
 
@@ -35,10 +36,13 @@ bin/main: build/main.o Makefile
 test: bin/main
 	mpiexec --hostfile hst -np 4 ./bin/main
 
+memcheck: bin/main
+	mpiexec --hostfile hst -np 4 valgrind ./bin/main > log.txt
+
 clean:
 	rm -rf build
 	find . -name \*~ -delete
 
 clear:
 	rm -rf bin lib doc
-	rm -f matrix create_matrix hamilton
+	rm -f matrix create_matrix hamilton rho

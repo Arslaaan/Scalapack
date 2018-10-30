@@ -74,7 +74,7 @@ public:
     MPI_Offset filesize;
     MPI_File_open(MPI_COMM_WORLD,name.c_str(),MPI_MODE_RDONLY,MPI_INFO_NULL,&thefile);
     MPI_File_get_size(thefile,&filesize);
-    int filesize_name = filesize/sizeof(double);
+    filesize = filesize/sizeof(double);
     const int matrix = rows*cols*2,qvector = rows*2,number = 2;
     if(filesize == matrix){
       for (int i = 0; i < myProcRows; i++) {
@@ -82,17 +82,17 @@ public:
         MPI_File_set_view(thefile,2*sizeof(double)*(cols*(myProcRowsOffset+i)+myProcColsOffset),MPI_DOUBLE,MPI_DOUBLE,"native",MPI_INFO_NULL);
         MPI_File_read(thefile,tmp_buf,2*myProcCols,MPI_DOUBLE,MPI_STATUS_IGNORE);
         for (int j = 0; j < myProcCols; j++) {
-          data[i*myProcCols + j] = complex<double>(tmp_buf[j*2],0);
+          data[i*myProcCols + j] = complex<double>(tmp_buf[j*2],tmp_buf[j*2 + 1]);
         }
         delete(tmp_buf);
       }
     }
     else{
       if(filesize == qvector){
-        //i dont know now
       }
       else{
-        //to do later
+        cout<<filesize<<endl;
+        cout<<"err1"<<endl;
       }
     }
   }
@@ -105,6 +105,9 @@ public:
     }
   }
 
+  /*
+   * заполняет диагональ матрицы значениями из double*
+   */
   void Fill(double* x){
     for (int i = 0; i < myProcRows; i++) {
   		for (int j = 0; j < myProcCols; j++) {
@@ -141,6 +144,26 @@ public:
       cout<<"--------------------------------"<<endl;
   }
 
+  void Print(string key) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(key == "diagonal"){
+      for(int i = 0; i < nproc; ++i) {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if((myProcRow == myProcCol) && (i == myProcRow)){
+          for(int x = 0; x < myProcRows; ++x)
+            if((myProcRow == procrows - 1) && (x == myProcRows - 1))
+              cout<<data[x*myProcCols + x]<<flush;
+            else
+              cout<<data[x*myProcCols + x]<<","<<flush;
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(rank == nproc - 1)
+      cout<<endl;
+  }
+
   complex<double>* getData() {
     return data;
   }
@@ -163,6 +186,32 @@ public:
             &cdOne, data, &ione, &ione, desc,
             B.getData(), &ione, &ione, B.getDesc(),
             &cdZero, C.getData(), &ione, &ione, C.getDesc());
+  }
+
+  void Multiply(DistributedMatrix& A,DistributedMatrix& B,DistributedMatrix& C){
+    DistributedMatrix tmp1(6,6,rank,nproc,3,icon);
+    DistributedMatrix tmp2(6,6,rank,nproc,3,icon);
+    B.Multiply(C,tmp1);
+    A.Multiply(tmp1,tmp2);
+    *this = tmp2;
+  }
+
+  void conjTrans(DistributedMatrix& B) {
+    B.Fill(static_cast<double>(0));
+    complex<double> cdOne(1.0,0.0);
+    complex<double> cdZero(0.0, 0.0);
+    int ione = 1;
+    DistributedMatrix I(rows,cols,rank,nproc,3,icon);
+    double* ones = new double[rows];
+    for(int i = 0;i < rows;++i)
+      ones[i] = 1;
+    I.Fill(ones);
+    pzgemm_((char*)"C", (char*)"N", &rows, &rows, &rows,
+            &cdOne, data, &ione, &ione, desc,
+            I.getData(), &ione, &ione, I.getDesc(),
+            &cdZero, B.getData(), &ione, &ione, B.getDesc());
+/*
+*/
   }
 
 
@@ -210,41 +259,45 @@ public:
       }
   }
 
-  ~DistributedMatrix() {
-    delete(data);
-    //Cblacs_gridexit(icon);
-    //Cblacs_exit(0);
-  }
-
 };
-
-void test_mult(int rank, int nproc, int icon) {
-  DistributedMatrix A(6,6,rank,nproc,3,icon);
-  DistributedMatrix B(6,6,rank,nproc,3,icon);
-  DistributedMatrix C(6,6,rank,nproc,3,icon);
-  A.Fill("matrix");
-  B.Fill("matrix");
-  C.Fill(static_cast<double>(0));
-  A.Multiply(B,C);
-  C.Print();
-}
 
 void test_svd(int rank, int nproc, int icon) {
   double dt = 0.5;
+  int n = 4;
   DistributedMatrix H(6,6,rank,nproc,3,icon);
+  DistributedMatrix rho(6,6,rank,nproc,3,icon);
+  DistributedMatrix tmp(6,6,rank,nproc,3,icon);
   DistributedMatrix left(6,6,rank,nproc,3,icon);
   DistributedMatrix right(6,6,rank,nproc,3,icon);
   DistributedMatrix middle(6,6,rank,nproc,3,icon);
+  DistributedMatrix unitary(6,6,rank,nproc,3,icon);
+  DistributedMatrix transposed(6,6,rank,nproc,3,icon);
   H.Fill("hamilton");
+  rho.Fill("matrix");
   left.Fill(static_cast<double>(0));
+  middle.Fill(static_cast<double>(0));
   right.Fill(static_cast<double>(0));
+  tmp.Fill(static_cast<double>(0));
 
   H.CreateSVD(middle, left, right);// H == left*middle*right
-  middle.Exp(dt);// middle = exp(middle*(-i)*dt)
-  middle.Multiply(right,H);// H = middle*right
-  left.Multiply(H,right);// right = left * H
-  H = right;// H == right == left * H
-  //H.Print();
+  middle.Exp(dt);
+  unitary.Multiply(left,middle,right);//unitary = left*middle*right;
+
+  //все выше верно работает
+  unitary.conjTrans(transposed);
+  transposed.Multiply(unitary,tmp);
+  //должно печатать единичную матрицу,но не печатает,
+  //ошибка где то в транспонировании
+  tmp.Print();
+
+/*
+  for(int i = 0;i < n;++i){
+    //rho.Print();
+    rho.Print("diagonal");
+    tmp.Multiply(transposed,rho,unitary);
+    rho = tmp;
+  }
+*/
 }
 
 
@@ -258,11 +311,9 @@ int main(int argc,char** argv){
   Cblacs_get(-1, 0, &icon);
   Cblacs_gridinit(&icon, (char *) "r", gridrow, gridcol);
 
-  //test_mult(rank, nproc, icon);
   test_svd(rank, nproc, icon);
 
   // exit
-  //Cblacs_gridexit(icon);
   MPI_Barrier(MPI_COMM_WORLD);
   Cblacs_exit(0);
 }

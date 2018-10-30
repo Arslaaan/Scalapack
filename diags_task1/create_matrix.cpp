@@ -2,8 +2,14 @@
 #include <string>
 #include <cstdlib>
 #include <complex>
+#include <random>
+#include <ctime>
 
 using namespace std;
+
+size_t N;
+size_t M;
+string key;
 
 /*
  * 1 1 1 2 2 2
@@ -25,11 +31,6 @@ void block(int i, int j, double& real, double& img) {
     if((i<3) && (j<3))
       real = 1;
   }
-  /*
-  if(j>=3)
-    real = 2;
-  //res = 6*i + j;
-  */
   img = 0;
 }
 
@@ -43,17 +44,25 @@ void block(int i, int j, double& real, double& img) {
  */
 void line(int i, int j, double& real, double& img) {
   complex<double> res;
-  res = 6*i + j;
+  res = M*i + j;
   real = res.real();
   img = res.imag();
 }
 
-
-void function(int i,int j,double& real,double& img){
-  line(i, j, real, img);
+void random_line(int i, int j, double& real, double& img){
+  real = i*static_cast<double>(rand())/RAND_MAX;
+  img = j*static_cast<double>(rand())/RAND_MAX;
 }
 
-void create_file(size_t N,size_t M,char* str){
+
+void function(int i,int j,double& real,double& img){
+  if(key == "line")
+    line(i, j, real, img);
+  else
+    random_line(i,j,real,img);
+}
+
+void create_file(char* str){
   FILE* f;
   f = fopen(str,"wb");
 	for(size_t i = 0;i < N;++i)
@@ -61,15 +70,16 @@ void create_file(size_t N,size_t M,char* str){
       double real,img;
     	function(i,j,real,img);
     	fwrite(&real,sizeof(real),1,f);
-    	fwrite(&real,sizeof(img),1,f);
+    	fwrite(&img,sizeof(img),1,f);
 	   }
   fclose(f);
 }
 
 int main(int argc,char** argv){
-	size_t x,y;
-	x = atoi(argv[1]);
-	y = atoi(argv[2]);
-	create_file(x,y,argv[3]);
+	N = atoi(argv[1]);
+	M = atoi(argv[2]);
+  key = argv[4];
+  srand(static_cast<unsigned>(clock()));
+	create_file(argv[3]);
 	return 0;
 }
