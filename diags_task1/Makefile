@@ -1,6 +1,9 @@
 OPT=	-O2
 FLAGS=	-DUSE_COMPLEX -DUSE_DOUBLE -g
-N=6
+N=18
+dt=0.5
+iterations=5
+nproc=81
 
 ifneq (,$(findstring lomonosov,$(shell hostname)))
 	LIBS=	-lmkl_scalapack_lp64 -lmkl_lapack95_lp64 -lmkl_blacs_intelmpi_lp64 \
@@ -16,8 +19,8 @@ endif
 matrix:
 	g++ -Wall create_matrix.cpp -o create_matrix
 	./create_matrix $(N) $(N) matrix line
-	./create_matrix $(N) $(N) hamilton line
-	./create_matrix $(N) $(N) rho random
+	./create_matrix $(N) $(N) hamilton max_coord
+	./create_matrix $(N) $(N) rho line
 
 all: bin
 
@@ -34,10 +37,10 @@ bin/main: build/main.o Makefile
 	mpicxx -o $@ $(OPT) build/main.o $(LIBS)
 
 test: bin/main
-	mpiexec --hostfile hst -np 4 ./bin/main
+	mpiexec -np $(nproc) ./bin/main $(dt) $(iterations) $(N)
 
 memcheck: bin/main
-	mpiexec --hostfile hst -np 4 valgrind ./bin/main > log.txt
+	mpiexec -np $(nproc) valgrind ./bin/main > log.txt
 
 clean:
 	rm -rf build

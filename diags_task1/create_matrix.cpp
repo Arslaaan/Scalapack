@@ -49,15 +49,24 @@ void line(int i, int j, double& real, double& img) {
   img = res.imag();
 }
 
-void random_line(int i, int j, double& real, double& img){
+void random_line(int i, int j, double& real, double& img) {
   real = i*static_cast<double>(rand())/RAND_MAX;
   img = j*static_cast<double>(rand())/RAND_MAX;
+}
+
+void max_coord(int i, int j, double& real, double& img) { 
+  const double planck_cst = 6.62606957e-34;
+  // real = ((double)max(i, j))/planck_cst;
+  real = max(i,j);
+  img = 0;
 }
 
 
 void function(int i,int j,double& real,double& img){
   if(key == "line")
     line(i, j, real, img);
+  else if(key == "max_coord") 
+    max_coord(i, j, real, img);
   else
     random_line(i,j,real,img);
 }
