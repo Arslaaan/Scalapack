@@ -13,7 +13,9 @@ extern "C" {
 	void Cblacs_gridexit( int context);
 	void Cblacs_exit( int error_code);
 	void Cblacs_gridmap( int* context, int* map, int ld_usermap, int np_row, int np_col);
+	
 	void pzgemm_(char *transa, char *transb, int *m, int *n, int *k, complex_d *alpha, complex_d *a, int *ia, int *ja, int *desca, complex_d *b, int *ib, int *jb, int *descb, complex_d *beta, complex_d *c, int *ic, int *jc, int *descc);
+	void pzheevd_(char *jobz, char *uplo, int *n, complex_d *a, int *ia, int *ja, int *desc_a, double *w, complex_d *z, int *iz, int *jz, int *desc_z, complex_d *work, int *lwork, double *rwork, int *lrwork, int *iwork, int *liwork, int *info);
 
 	int npreroc_(int *n, int *nb, int *iproc, int *isrcproc, int *nprocs);
 	int numroc_(int *n, int *nb, int *iproc, int *isrcproc, int *nprocs);

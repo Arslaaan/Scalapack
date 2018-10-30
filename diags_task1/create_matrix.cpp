@@ -54,7 +54,7 @@ void random_line(int i, int j, double& real, double& img) {
   img = j*static_cast<double>(rand())/RAND_MAX;
 }
 
-void max_coord(int i, int j, double& real, double& img) { 
+void max_coord(int i, int j, double& real, double& img) {
   const double planck_cst = 6.62606957e-34;
   // real = ((double)max(i, j))/planck_cst;
   real = max(i,j);
@@ -65,7 +65,7 @@ void max_coord(int i, int j, double& real, double& img) {
 void function(int i,int j,double& real,double& img){
   if(key == "line")
     line(i, j, real, img);
-  else if(key == "max_coord") 
+  else if(key == "max_coord")
     max_coord(i, j, real, img);
   else
     random_line(i,j,real,img);
@@ -74,13 +74,24 @@ void function(int i,int j,double& real,double& img){
 void create_file(char* str){
   FILE* f;
   f = fopen(str,"wb");
-	for(size_t i = 0;i < N;++i)
-  	for(size_t j = 0;j < M;++j){
+  if(key == "vector"){
+    for(size_t i = 0;i < N;++i){
       double real,img;
-    	function(i,j,real,img);
+      key = "line";
+    	function(i,0,real,img);
     	fwrite(&real,sizeof(real),1,f);
     	fwrite(&img,sizeof(img),1,f);
-	   }
+    }
+  }
+  else{
+  	for(size_t i = 0;i < N;++i)
+    	for(size_t j = 0;j < M;++j){
+        double real,img;
+      	function(i,j,real,img);
+      	fwrite(&real,sizeof(real),1,f);
+      	fwrite(&img,sizeof(img),1,f);
+  	   }
+  }
   fclose(f);
 }
 
